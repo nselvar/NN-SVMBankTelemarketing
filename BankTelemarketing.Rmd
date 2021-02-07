@@ -1,0 +1,449 @@
+---
+title: "Data-Driven Approach To Predict Success Of Bank Telemarketing"
+author: "Nisha Selvarajan"
+date: "10/24/2020"
+output:
+  pdf_document: 
+      toc: yes
+      toc_depth: 4
+      latex_engine: xelatex
+      #toc_float: true
+  html_document: 
+      theme: journal
+      toc: yes
+      toc_depth: 4
+      keep_md: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+```
+
+### Objectives
+
+***Data-Driven Approach To Predict Success Of Bank Telemarketing ***
+
+Nowadays, marketing spending in the banking industry is massive, meaning that it is essential for banks to optimize marketing strategies and improve effectiveness. Understanding customers’ need leads to more effective marketing plans, smarter product designs and greater customer satisfaction.The main objective of this project is to increase the effectiveness of the bank's telemarketing campaign.This project will enable the bank to develop a more granular understanding of its customer base, predict customers' response to its telemarketing campaign and establish a target customer profile for future marketing plans.
+
+By analyzing customer features, such as demographics and transaction history, the bank will be able to predict customer saving behaviours and identify which type of customers is more likely to make term deposits. The bank can then focus its marketing efforts on those customers. This will not only allow the bank to secure deposits more effectively but also increase customer satisfaction by reducing undesirable advertisements for certain customers.
+
+We are given the data of direct marketing campaigns (phone calls) of a Portuguese banking institution. The classification goal is to predict if the client will subscribe a term deposit (target variable y). The goal here is to model the probability of buying, as a function of the customer features.
+
+###  Data Description
+
+  + Data set which is utilized for this research has been taken from University of California,
+Irvine machine learning repository
+( https://archive.ics.uci.edu/ml/datasets/Bank+Marketing?package=regsel&version=0.2) 
+which is openly available for the public for research purpose. The dataset contains 
+41188 marketing campaigns observations with 20 input features. The details
+of 20 attributes are following.
+
+
+```{r, message = FALSE, echo=FALSE}
+library(knitr)
+library(kableExtra)
+library(dplyr)
+library(ggplot2)
+library(DataExplorer)
+library(ggplot2)
+library(funModeling)
+
+
+
+bank_main_data.raw <- read.csv(file = "/Users/nselvarajan/Desktop/R/Assignment3/datasets/bank-additional-full.csv", header = T, sep = ";",stringsAsFactors = T)
+bank_main_data.raw <- data.frame(bank_main_data.raw, stringsAsFactors = FALSE)
+
+df <- data.frame(Names = c("age",
+                           "job",
+                           "marital",
+                           "education",
+                           "default",
+                           "housing",
+                           "loan",
+                           "contact",
+                           "month",
+                           "day_of_week",
+                           "duration",
+                           "campaign",
+                           "pdays",
+                           "previous",
+                           "poutcome",
+                           "emp.var.rate",
+                           "cons.price.idx",
+                           "cons.conf.idx",
+                            "euribor3m",
+                           "nr.employed",
+                           "y"),
+                  Description = c("Numeric - Age of the client",
+                           "Categorical - Type of Job",
+                           "Categorical - Marital Status of Client",
+                           "Categorical - Education qualification of client",
+                           "Categorical - Has credit in default?",
+                           "Categorical - Has housing loan?",
+                           "Categorical - Has personal loan?",
+                           "Categorical - Contact like cellular,telephone ",
+                           "Categorical - Last Contact Month of Year",
+                          "Categorical -  Last Contact Day of the Week",
+                           "Numerical - Last Contact Duration in Seconds",
+                          "Numerical - No of contacts performed for Campaign",
+                         "Numerical - No of days  passed  after previous campaign contact.",
+                        "Numerical - No of contacts performed before this campaign for this client",
+                        "Categorical - Outcome of the previous marketing campaign",
+                  "Numerical - Employment Variation Rate - quarterly indicator",
+                   "Numerical - Consumer price index - monthly indicator ",
+                   "Numerical - Consumer confidence index - monthly indicator",
+                   "Numerical- Euribor 3 month rate - daily indicator ",
+                   "Numerical- No of employees - quarterly indicator",
+                  "Categorical- Has the client subscribed a term deposit?" ))
+kbl(df)%>%
+ kable_paper(full_width = F) %>%
+ column_spec(2, width = "30em")
+```
+
+###  Data Analysis
+
+  + Plot missing values of all the features in the dataset.
+
+```{r, message = FALSE, echo=FALSE}
+plot_missing(bank_main_data.raw)
+```
+
+  + Ploting histograms for numerical variables.
+
+```{r, message = FALSE, echo=FALSE}
+plot_num(bank_main_data.raw)
+```
+
+  + Get  metric table with many indicators for all numerical variables, automatically skipping the non-numerical variables.
+
+```{r, message = FALSE, echo=FALSE}
+
+profiling_num(bank_main_data.raw)
+```
+
+### Variable Importance & Crossplot to Deposit
+
++ Plot variable importance with  several metrics such as entropy (en), mutual information(mi), information gain (ig) and gain ratio (gr).
+
+```{r, message = FALSE, echo=FALSE}
+
+var_imp <- var_rank_info(bank_main_data.raw, "y")
+# Plotting 
+ggplot(var_imp, 
+       aes(x = reorder(var, gr), 
+           y = gr, fill = var)
+) + 
+  geom_bar(stat = "identity") + 
+  coord_flip() + 
+  theme_bw() + 
+  xlab("") + 
+  ylab("Variable Importance 
+       (based on Information Gain)"
+  ) + 
+  guides(fill = FALSE)
+```
+
++ Bivariate analysis crosss plot showing relationship of each and every variable with respect to target variable 
+
+```{r, message = FALSE, echo=FALSE}
+ cross_plot(data=bank_main_data.raw, target="y")
+```
+
+### Prepare Data for Classification
+
++ Select variables relevant to customers:Based on the variable importance, we will use pdays, poutcome,previous, duration, cons.price.idx,cons.conf.idx,contact feature for further analysis. 
+
+```{r, message = FALSE, echo=FALSE}
+
+ subsets <- data.frame(   as.factor(bank_main_data.raw$y),
+                           as.numeric((bank_main_data.raw$pdays)),
+                           as.numeric(as.factor(bank_main_data.raw$poutcome)),
+                           as.numeric((bank_main_data.raw$previous)),
+                           as.numeric((bank_main_data.raw$duration)),
+                           as.numeric(as.factor(bank_main_data.raw$contact)), 
+                           as.numeric((bank_main_data.raw$cons.conf.idx)),
+                           as.numeric((bank_main_data.raw$cons.price.idx)))
+colnames(subsets) <- c("Term_Deposit", 
+                       "NumberOfDaysPassedAfterLastContact",
+                       "PreviousMarketingOutCome", 
+                       "NoOfContactsPerformed", 
+                       "LastContactDuration", 
+                       "ContactCommunicationType", 
+                       "ConsumerPriceIndex", 
+                       "ConsumerConfidenceIndex")
+str(subsets)
+```
+
++ Load the cleaned dataset: 
+      -  Convert categorical variable to numerical variable.
++  Data slicing: 
+      -  Dataset is split into 80 percent of training data, 20 % of test set.
+ 
+```{r, message = FALSE, echo=FALSE}
+library(tidyverse)
+library(class)
+library(rpart)
+library(rpart.plot)
+library(e1071)
+library(caret)
+library(corrplot)
+library(caTools)
+library(party)
+library(DataExplorer)
+library(ggplot2)
+library(funModeling)
+
+set.seed(212)
+trainIndex <- createDataPartition(subsets$Term_Deposit, p = 0.8, list=FALSE, times=3)
+subTrain <- subsets[trainIndex,]
+subTest <- subsets[-trainIndex,]
+```
++  TrainingParameters : 
+      -  train() method is passed with repeated cross-validation resampling method for 10 number of resampling iterations repeated for 3 times.
+
+```{r, message = FALSE, echo=FALSE}
+TrainingParameters <- trainControl(method = "repeatedcv", number = 10, repeats=3,classProbs = TRUE)
+```
+
+### Machine Learning: Classification using Neural Networks
+ 
++  Model Training
+      - We can us neuralnet() to train a NN model. Also, the train() function from caret can help us tune parameters. We can plot the result to see which set of parameters is fit our data the best.
+      - nnnet package by defualt uses the Logisitc Activation function.
+      - Data Pre-Processing With Caret: The scale transform calculates the standard deviation for an attribute and divides each value by that standard deviation.
+      - The center transform calculates the mean for an attribute and subtracts it from each value.
+      - Combining the scale and center transforms will standardize your data.
+      - Attributes will have a mean value of 0 and a standard deviation of 1.
+      - Training transforms can prepared and applied automatically during model evaluation.
+      - Transforms applied during training are prepared using the preProcess() and passed to the train() function via the preProcess argument.
+      - Backpropagation algorithm is a supervised learning method for multilayer feed-forward networks from the field of Artificial Neural Networks.
+      - The principle of the backpropagation approach is to model a given function by modifying internal weightings of input signals to produce an expected output signal. The system is trained using a supervised learning method, where the error between the system’s output and a known expected output is presented to the system and used to modify its internal state.
+      - We use Backpropagation as algorithm in neural network package.
+      
+```{r, message = FALSE, echo=TRUE}
+      
+nnetGrid <-  expand.grid(size = seq(from = 1, to = 5, by = 1)
+                         ,decay = seq(from = 0.1, to = 0.2, by = 0.1)
+                         )
+nn_model <- train(Term_Deposit ~ ., subTrain,
+                  method = "nnet",  algorithm = 'backprop',     
+                  trControl= TrainingParameters,
+                  preProcess=c("scale","center"),
+                  na.action = na.omit,
+                  #metric = "ROC",
+                  tuneGrid = nnetGrid,
+                  trace=FALSE,
+                  verbose=FALSE)      
+```     
+      - Based on the caret neural network model, train sets hidden layer.caret neural network picks
+the best neural network based on size, decay.We can visualize accuracy for different hidden layers below:
+
+```{r, message = FALSE, echo=FALSE}
+nn_model$results   
+plot(nn_model)
+```      
+      
+  + Prediction
+     - Now, our model is trained with accuracy = 0.8889 We are ready to predict classes for our test set. 
+
+```{r, message = FALSE, echo=FALSE}
+
+prediction <- predict(nn_model, subTest[-1])                           
+# predict
+table(prediction, subTest$Term_Deposit)  
+
+```     
+  + Confusion matrix & Accuracy of Neural Network model:
+```{r, message = FALSE, echo=FALSE}
+accuracy <- sum(prediction == (subTest$Term_Deposit))/length(subTest$Term_Deposit)
+print(accuracy)
+
+confusionNN <-confusionMatrix(as.factor(prediction),as.factor(subTest$Term_Deposit))
+print(confusionNN)
+```    
+
+  + Confusion matrix & Accuracy of Neural Network model:
+     - Plotting nnet variable importance
+```{r, message = FALSE, echo=FALSE}
+
+library(NeuralNetTools)
+varImp_nn<-varImp(nn_model)
+print(varImp_nn)
+ggplot(varImp_nn)
+plot(varImp_nn)
+```    
+     - Graphical Representation of our Neural Network
+  
+```{r, message = FALSE, echo=FALSE}
+library(NeuralNetTools)
+plotnet(nn_model, y_names = "Term DEPOSIT")
+title("Graphical Representation of our Neural Network")
+```    
+
+
+### Machine Learning: Classification using SVM
+
+  + SVM is another classification method that can be used to predict if a client falls into either ‘yes’ or ‘no’ class.
+  + The linear, polynomial and RBF or Gaussian kernel in SVM are simply different in case of making the hyperplane decision boundary between the classes.
+  + The kernel functions are used to map the original dataset (linear/nonlinear ) into a higher dimensional space with view to making it linear dataset.
+  + Usually linear and polynomial kernels are less time consuming and provides less accuracy than the rbf or Gaussian kernels.
+  + The k cross validation is used to divide the training set into k distinct subsets. Then every subset is used for training and others k-1 are used for validation in the entire trainging phase. This is done for the better training of the classification task.Overall, if you are unsure which kernel method would be best, a good practice is use of something like 10-fold cross-validation for each training set and then pick the best algorithm.
+      
+```{r, message = FALSE, echo=FALSE}
+library(knitr)
+library(kableExtra)
+library(dplyr)
+library(ggplot2)
+library(DataExplorer)
+library(ggplot2)
+library(funModeling)
+library(tidyverse)
+library(class)
+library(rpart)
+library(rpart.plot)
+library(e1071)
+library(caret)
+library(corrplot)
+library(caTools)
+library(party)
+library(DataExplorer)
+library(ggplot2)
+library(funModeling)
+
+bank_main_data.svm <- read.csv(file = "/Users/nselvarajan/Desktop/R/Assignment3/bank-additional.csv", header = T, sep = ";",stringsAsFactors = T)
+bank_main_data.svm <- data.frame(bank_main_data.svm, stringsAsFactors = FALSE)
+ subsets_svm <- data.frame(   as.factor(bank_main_data.svm$y),
+                           as.numeric((bank_main_data.svm$pdays)),
+                           as.numeric(as.factor(bank_main_data.svm$poutcome)),
+                           as.numeric((bank_main_data.svm$previous)),
+                           as.numeric((bank_main_data.svm$duration)),
+                           as.numeric(as.factor(bank_main_data.svm$contact)), 
+                           as.numeric((bank_main_data.svm$cons.conf.idx)),
+                           as.numeric((bank_main_data.svm$cons.price.idx)))
+colnames(subsets_svm) <- c("Term_Deposit", 
+                       "NumberOfDaysPassedAfterLastContact",
+                       "PreviousMarketingOutCome", 
+                       "NoOfContactsPerformed", 
+                       "LastContactDuration", 
+                       "ContactCommunicationType", 
+                       "ConsumerPriceIndex", 
+                       "ConsumerConfidenceIndex")
+
+
+set.seed(212)
+trainIndexSVM <- createDataPartition(subsets_svm$Term_Deposit, p = 0.8, list=FALSE, times=3)
+subTrainSVM <- subsets_svm[trainIndexSVM,]
+subTestSVM <- subsets_svm[-trainIndexSVM,]
+```  
+### SVM Classifier using Linear Kernel
+
+  + Caret package provides train() method for training our data for various algorithms. We just need to pass different parameter values for different algorithms. Before train() method, we will first use trainControl() method.
+
+  + We are setting 3 parameters of trainControl() method. The "method" parameter holds the details about resampling method. We can set "method" with many values like  "boot", "boot632", "cv", "repeatedcv", "LOOCV", "LGOCV" etc. For this project, let’s try to use repeatedcv i.e, repeated cross-validation.
+
+  +  The "number" parameter holds the number of resampling iterations. The "repeats " parameter contains the complete sets of folds to compute for our repeated cross-validation. We are using setting number =10 and repeats =3. This trainControl() methods returns a list. We are going to pass this on our train() method.
+
+  + Before training our SVM classifier, set.seed().
+
+  +  For training SVM classifier, train() method should be passed with "method" parameter as "svmLinear". We are passing our target variable Term_Deposit. The "Term_Deposit.~." denotes a formula for using all attributes in our classifier and Term_Deposit. as the target variable. The "trControl" parameter should be passed with results from our trianControl() method. The “preProcess”  parameter is for preprocessing our training data.
+
+  + As discussed earlier for our data, preprocessing is a mandatory task. We are passing 2 values in our "preProcess" parameter "center" & "scale". These two help for centering and scaling the data. After preProcessing these convert our training data with mean value as approximately “0” and standard deviation as "1". The "tuneLength" parameter holds an integer value. This is for tuning our algorithm.
+
+```{r, message = FALSE, echo=TRUE}
+
+trctrl <- trainControl(method = "repeatedcv", number = 10, repeats = 2)
+set.seed(323)
+grid <- expand.grid(C = c( 0.25, 0.5, 1))
+svm_Linear_Grid <- train(Term_Deposit ~ ., data = subTrainSVM, method = "svmLinear", trControl=trctrl, preProcess = c("center", "scale"),
+                         tuneGrid = grid,
+                         tuneLength = 10)
+svm_Linear_Grid
+```  
+  +  The above model is showing that our classifier is giving best accuracy on C = 0.25 Let’s try to make predictions using this model for our test set and check its accuracy.
+
+```{r, message = FALSE, echo=FALSE}
+
+plot(svm_Linear_Grid)
+
+predictionsvm <- predict(svm_Linear_Grid, subTestSVM[-1]) 
+#table(predictionsvm, subTestSVM$Term_Deposit)   
+```  
+  + Accuracy on the test set by train control is 89% using C=0.25.
+
+```{r, message = FALSE, echo=FALSE}
+
+accuracysvm <- sum(predictionsvm == (subTestSVM$Term_Deposit))/length(subTestSVM$Term_Deposit)
+print(accuracysvm)
+
+#confusionNNSvm <-confusionMatrix(as.factor(predictionsvm),as.factor(subTestSVM$Term_Deposit))
+#print(confusionNNSvm)
+
+```  
+  + Final prediction accuracy on the test set is 0.9166667.
+
+### SVM Classifier using Non-Linear Kernel
+  + Now, we will try to build a model using Non-Linear Kernel like Radial Basis Function. For using RBF kernel, we just need to change our train() method’s "method" parameter to "svmRadial". In Radial kernel, it needs to select proper value of Cost "C" parameter and "sigma" parameter.
+
+```{r, message = FALSE, echo=TRUE}
+
+set.seed(323) 
+grid_radial <- expand.grid(sigma = c(0.25, 0.5,0.9),
+ C = c(0.25, 0.5,1))
+svm_Radial <- train(Term_Deposit ~ ., data = subTrainSVM, method = "svmRadial",
+trControl=trctrl,
+preProcess = c("center", "scale"),tuneGrid = grid_radial,
+tuneLength = 10)
+
+svm_Radial
+```  
+  + SVM-RBF kernel calculates variations and will present us best values of sigma & C. Based on the output best values of sigma= 0.9 & C=1 Let’s check our trained models’ accuracy on the test set.
+
+```{r, message = FALSE, echo=FALSE}
+
+predictionnonlinearsvm <- predict(svm_Radial, subTestSVM[-14])                          
+accuracynonlinearsvm <- sum(predictionnonlinearsvm == (subTestSVM$Term_Deposit))/length(subTestSVM$Term_Deposit)
+print(accuracynonlinearsvm)
+```  
+  + Final prediction accuracy on the test set is 0.8333333
+    
+### Comparision between SVM models
+
++ Comparision between SVM Linear and Radial Models.
+```{r, message = FALSE, echo=FALSE}
+library(ISLR)
+library(caret)
+library(readxl)
+library(pROC)
+library(lattice)
+library(ggplot2)
+library(dplyr)
+library(e1071) 
+library(corrplot)
+library(ggplot2)
+library(multiROC)
+library(MLeval)
+library(AppliedPredictiveModeling)
+library(corrplot)
+library(Hmisc)
+library(dplyr)
+library(quantmod) 
+
+library(nnet)
+library(caret)
+library(NeuralNetTools)
+
+algo_results <- resamples(list(SVM_RADIAL=svm_Radial, SVM_LINEAR=svm_Linear_Grid))
+
+summary(algo_results)
+
+scales <- list(x=list(relation="free"), y=list(relation="free"))
+bwplot(algo_results, scales=scales)
+
+splom(algo_results)
+
+```  
+
+### Conclusion
+From the above implementation, the results are impressive and convincing in terms of using a machine learning algorithm to decide on the marketing campaign of the bank. Majority of the attributes in the dataset contribute significantly to the building of a predictive model. All the three ML approach acheives good accuracy rate(>85%) and are easier to implement.
